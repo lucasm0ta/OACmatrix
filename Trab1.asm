@@ -2,9 +2,10 @@
 # OAC 2/2016
 
 .data
-matrix: .space 72
-matrix_u: .space 36
-matrix_l: .space 36
+# Mota, mudei pra 72 pq double ocupa dobro de espaco,
+# No final do programa, a matriz U vai estar em matriz e a matriz L em matriz_l (duh)
+matriz: .space 72
+matriz_l: .space 72
 msg1: .asciiz "Qual o numero de linhas? <ENTER>\n"
 msg2: .asciiz "Qual o numero de colunas? <ENTER>\n"
 elemento: .asciiz "Elemento "
@@ -12,6 +13,7 @@ barra: .asciiz "-"
 dois_pontos: .asciiz ": "
 quebra_linha: .asciiz "\n"
 space: .asciiz "  "
+limpa_console: .asciiz "\n\n\n\n\n\n\n\n\n\n\n\n" # Imprime isso pra limpar o console
 
 
 .text
@@ -78,7 +80,7 @@ mflo $t1
 
 # Soma da posicao na linha + offset
 add $t4, $t0, $t1
-sdc1 $f0, matrix($t4)
+sdc1 $f0, matriz($t4)
 
 addi $t2, $t2, 1 # Vai pro proximo elemento da linha
 bne $t2, $s0, LOOP_LINHA
@@ -91,6 +93,23 @@ bne $t3, $s1, LOOP_LINHA
 move $a0, $s0
 move $a1, $s1
 jal IMPRIME_MATRIZ
+move $a0, $s0
+move $a1, $s1
+jal MATRIZ_LU
+li $v0,4
+la $a0, limpa_console
+syscall
+move $a0, $s0
+move $a1, $s1
+jal IMPRIME_MATRIZ
+
+li $v0,4
+la $a0, quebra_linha
+syscall
+
+move $a0, $s0
+move $a1, $s1
+jal IMPRIME_MATRIZ_L
 j EXIT
 
 
@@ -129,7 +148,7 @@ mult $t5, $t1
 mflo $t5
 
 add $t4, $t4, $t5
-ldc1 $f12, matrix($t4) # Carrega valor que vai ser impresso em lw
+ldc1 $f12, matriz($t4) # Carrega valor que vai ser impresso em lw
 
 # Imprime valor + espaco
 li $v0, 3
@@ -163,33 +182,223 @@ addi $sp, $sp, 24
 jr $ra # Fim da funcao
 
 
+
+# Subrotina que imprime a matriz
+# Recebe $a0 = Numero de Linhas, $a1 = Numero de Colunas
+IMPRIME_MATRIZ_L:
+# Stacking
+addi $sp, $sp, -24
+sw $t0, 0($sp)
+sw $t1, 4($sp)
+sw $t2, 8($sp)
+sw $t3, 12($sp)
+sw $t4, 16($sp)
+sw $t5, 20($sp)
+# Body
+move $t0, $a0
+move $t1, $a1
+
+li $t2, 0 # Contador de linhas
+li $t3, 0 # Contador de colunas
+
+
+
+IMPRIME_MATRIZ_L_LOOP: # Loop da funcao
+
+# Calculando linha do elemento
+sll $t4, $t2, 3
+
+# Calculando coluna
+sll $t5, $t3, 3
+mult $t5, $t1
+mflo $t5
+
+add $t4, $t4, $t5
+ldc1 $f12, matriz_l($t4) # Carrega valor que vai ser impresso em lw
+
+# Imprime valor + espaco
+li $v0, 3
+syscall
+
+li $v0, 4
+la $a0, space
+syscall
+
+addi $t2, $t2, 1 # Vai pro proximo elemento da linha
+bne $t2, $t0, IMPRIME_MATRIZ_L_LOOP # Se n tiver acabado volta pro loop
+
+# Imprime quebra de linha pra mudar de coluna
+li $v0, 4
+la $a0, quebra_linha
+syscall
+
+addi $t3, $t3, 1 # Muda a coluna
+li $t2, 0 # Zera o contador do elemento na linha
+bne $t3, $t1, IMPRIME_MATRIZ_L_LOOP # Se n tiver acabado volta pro loop
+
+#Unstacking
+lw $t0, 0($sp)
+lw $t1, 4($sp)
+lw $t2, 8($sp)
+lw $t3, 12($sp)
+lw $t4, 16($sp)
+lw $t5, 20($sp)
+addi $sp, $sp, 24
+
+jr $ra # Fim da funcao
+
+
+
+
 # Funcao que troca duas linhas da matriz de lugar (pivoting)
 # Recebe $a0 = num de linhas, $a1 = num de colunas, $a2 = linha1, $a3 = linha2
 TROCA_LINHA:
 #TODO
-
-
 jr $ra # Fim da fucao
+
+
+# Funcao que realiza a operacao L2 = L2 - (lambda)*L1
+# Onde L2 e L1 sao todos os elementos de linhas quaisquer da matriz
+# Recebe $a0 = tamanho da matriz (Sempre quadrada), $a1 = L1, $a2 = L2, $f12 = lambda
+OPERA_LINHAS:
+# Stacking
+addi $sp, $sp, -44
+sdc1 $f0, 0($sp)
+sdc1 $f2, 8($sp)
+sdc1 $f4, 16($sp)
+sw $t0, 24($sp)
+sw $t1, 28($sp)
+sw $t2, 32($sp)
+sw $t3, 36($sp)
+# Body
+li $t0, 0
+
+# Calculando coluna da linha1
+sll $t1, $a1, 3
+mult $t1, $a0
+mflo $t1
+
+# Calculando coluna da linha2
+sll $t2, $a2, 3
+mult $t2, $a0
+mflo $t2
+
+OPERA_LINHAS_LOOP:
+sll $t3, $t0, 3
+add $t3, $t3, $t1
+ldc1 $f0, matriz($t3) # Elemento da linha1
+
+sll $t3, $t0, 3
+add $t3, $t3, $t2
+ldc1 $f2, matriz($t3) # Elemento da linha2
+
+mul.d $f4, $f0, $f12 # $f4 = L1*lambda
+sub.d $f4, $f2, $f4 # $f4 = L2 - L1*lambda
+
+sdc1 $f4, matriz($t3) # Guarda na matriz
+
+addi $t0, $t0, 1
+bne $t0, $a0, OPERA_LINHAS_LOOP
+# Unstacking
+ldc1 $f0, 0($sp)
+ldc1 $f2, 8($sp)
+ldc1 $f4, 16($sp)
+lw $t0, 24($sp)
+lw $t1, 28($sp)
+lw $t2, 32($sp)
+lw $t3, 36($sp)
+addi $sp, $sp, 44
+
+jr $ra # Fim da funcao
+
+
+
 
 
 # Realiza a decoposicao LU
 # Recebe $a0 = num de linhas, $a1 = num de colunas
+# Ainda falta a logica de pivoteamento
 MATRIZ_LU:
 #Stacking
-
-
+addi $sp, $sp, -44
+sdc1 $f0, 0($sp)
+sdc1 $f12, 8($sp)
+sw $t0, 16($sp)
+sw $t1, 20($sp)
+sw $t2, 24($sp)
+sw $t3, 28($sp)
+sw $t4, 32($sp)
+sw $t5, 36($sp)
 #Body
+
 li $t0,0 # Contador da diagona principal
-li $t1,0 # Contador de elementos da linha
-li $t2,0 # Contador de coluna
+li $t1,0 # Contador de elementos na coluna
+move $t2, $a0 # Passando numero de linhas (Igual ao num de colunas)
 
 MATRIZ_LU_MAIN_LOOP:
-lwc1 $f12, matrix($t0) # Pega o primeiro elemento da diagonal principal
-li $v0, 3
-syscall
-#beq $t1, $a1, MATRIZ_LU_MAIN_LOOP # Se nao tiver percorrido a diagonal principal inteira, volta
+# Calculando coluna
+sll $t3, $t0, 3
+# Calculando linha
+sll $t4, $t0, 3
+mult $t4, $t2
+mflo $t4
+
+add $t3, $t4, $t3 # Posicao do elemento na diagonal principal
+ldc1 $f0, matriz($t3) # Pega o elemento na diagonal principal
+
+# A Logica de pivoteamento vai aqui
+
+
+div.d $f12, $f0, $f0 # Melhor jeito que eu achei de carregar 1 no reg
+sdc1 $f12, matriz_l($t3) # Coloca 1 na diagonal principal da matriz L
+
+addi $t1, $t0, 1 # Mais 1 pq comecamos do elemento abaixo da diagonal principal
+beq $t1, $t2 EXIT_MATRIZ_LU # Acabou
+ELIMINA_COLUNA_LOOP: # loop para eliminar coluna
+# $t0 = contador da diagonal, $t1 = contador de elementos na coluna
+
+sll $t3, $t0, 3 # calculando coluna
+# calculando linha
+sll $t4, $t1, 3
+mult $t4, $t2
+mflo $t4
+
+add $t3, $t4, $t3
+ldc1 $f2, matriz($t3)
+
+div.d $f12, $f2, $f0 # Lambda
+sdc1 $f12, matriz_l($t3) # escreve lambda na matriz L
+
+addi $sp, $sp, -4
+sw $ra, 0($sp)
+move $a1, $t0
+move $a2, $t1
+
+jal OPERA_LINHAS
+
+lw $ra, 0($sp)
+addi $sp, $sp, 4
+
+addi $t1, $t1, 1
+bne $t1, $t2, ELIMINA_COLUNA_LOOP
+
+addi $t0, $t0, 1
+bne $t0, $t2, MATRIZ_LU_MAIN_LOOP
+
 
 #Unstacking
+ldc1 $f0, 0($sp)
+ldc1 $f12, 8($sp)
+lw $t0, 16($sp)
+lw $t1, 20($sp)
+lw $t2, 24($sp)
+lw $t3, 28($sp)
+lw $t4, 32($sp)
+lw $t5, 36($sp)
+addi $sp, $sp, 44
+
+
+EXIT_MATRIZ_LU:
 jr $ra # Fim da fucao
 
 EXIT:
