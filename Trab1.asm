@@ -456,11 +456,52 @@ mult $t4, $t2
 mflo $t4
 
 add $t3, $t4, $t3 # Posicao do elemento na diagonal principal
-ldc1 $f0, matriz($t3) # Pega o elemento na diagonal principal
+PEGA_ELEMENTO_DIAG: ldc1 $f0, matriz($t3) # Pega o elemento na diagonal principal
 
 # A Logica de pivoteamento vai aqui
+# Registrador $f30 vai ser sempre zero pra ter com o que comparar
+c.eq.d $f0, $f30 
+bc1f END_PIVOTING # Se o elemento da diag. princ. nao for 0, pulamos para NOT_PIVOTING
 
+addi $t5, $t0, 1 # Vamos comecar olhando da linha abaixo
+PROCURA_LINHA_P_PIVOT:
+beq $t5, $t2, ERRO # se ja tivermos olhado todas as linhas
+# E nao der pra pivotear com nenhuma, teve algum erro
 
+sll $t6, $t5, 3
+mult $t6, $t2
+mflo $t6
+
+add $t6, $t3, $t6
+
+ldc1 $f12, matriz($t6)
+
+c.eq.d $f12, $f30 # Se for zero 
+bc1t PLPP_NEXT_ITERATION # Passa pra proxima
+
+# Se n nao for zero faz o pivoteamento
+move $a0, $t2
+move $a1, $t2
+move $a2, $t5
+move $a3, $t0
+
+addi $sp, $sp, -4
+sw $ra, 0($sp)
+
+jal TROCA_LINHA
+
+jal TROCA_LINHA_L
+
+lw $ra, 0($sp)
+addi $sp, $sp, 4
+j PEGA_ELEMENTO_DIAG # Volta pra pegar de novo o elemento da diag princ.
+# No caso aqui daria pra so trocar o valor de $f0 e ja ir direto
+# Mas acho que mandar pegar e comparar de novo eh mais seguro
+
+PLPP_NEXT_ITERATION: addi $t5, $t5, 1
+bne $t5, $t2, PROCURA_LINHA_P_PIVOT
+
+END_PIVOTING:
 div.d $f12, $f0, $f0 # Melhor jeito que eu achei de carregar 1 no reg
 sdc1 $f12, matriz_l($t3) # Coloca 1 na diagonal principal da matriz L
 
@@ -512,6 +553,8 @@ addi $sp, $sp, 44
 
 EXIT_MATRIZ_LU:
 jr $ra # Fim da fucao
+
+ERRO: # Se tiver algum erro
 
 EXIT:
 
