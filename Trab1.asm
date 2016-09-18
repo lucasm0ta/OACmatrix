@@ -89,10 +89,11 @@ li $t2, 0 # Volta pro primeiro elemento da linha
 addi $t3, $t3, 1 # Vai pra proxima coluna
 bne $t3, $s1, LOOP_LINHA
 
-# Nesse ponto a matriz ja esta pronta, $t0 guarda o numero de linhas e $t1 o numero de colunas
+# Nesse ponto a matriz ja esta pronta, $s0 guarda o numero de linhas e $s1 o numero de colunas
 move $a0, $s0
 move $a1, $s1
 jal IMPRIME_MATRIZ
+
 move $a0, $s0
 move $a1, $s1
 jal MATRIZ_LU
@@ -253,8 +254,119 @@ jr $ra # Fim da funcao
 # Funcao que troca duas linhas da matriz de lugar (pivoting)
 # Recebe $a0 = num de linhas, $a1 = num de colunas, $a2 = linha1, $a3 = linha2
 TROCA_LINHA:
+# Stacking
+addi $sp, $sp, -36
+sdc1 $f0, 0($sp)
+sdc1 $f2, 8($sp)
+sw $t0, 16($sp)
+sw $t1, 20($sp)
+sw $t2, 24($sp)
+sw $t3, 28($sp)
+sw $t4, 32($sp)
+# Body
+li $t0, 0
+
+sll $t1, $a1, 3
+mult $t1, $a2
+mflo $t1 # Primeiro elemento da linha 1
+
+sll $t2, $a1, 3
+mult $t2, $a3
+mflo $t2 # Primeiro elemento da linha 2
+
+TROCA_LINHA_LOOP:
+sll $t4, $t0, 3
+
+add $t3, $t1, $t4
+ldc1 $f0, matriz($t3) # Pega elemento da linha 1
+
+add $t3, $t2, $t4
+ldc1 $f2, matriz($t3) # Pega elemento da linha 2
+
+sdc1 $f0, matriz($t3)
+
+add $t3, $t1, $t4
+
+sdc1 $f2, matriz($t3)
+
+addi $t0, $t0, 1
+bne $t0, $a0, TROCA_LINHA_LOOP
+
+# Unstacking
+ldc1 $f0, 0($sp)
+ldc1 $f2, 8($sp)
+lw $t0, 16($sp)
+lw $t1, 20($sp)
+lw $t2, 24($sp)
+lw $t3, 28($sp)
+lw $t4, 32($sp)
+addi $sp, $sp, 36
+
 #TODO
 jr $ra # Fim da fucao
+
+
+# Funcao que troca duas linhas da matriz de lugar (pivoting)
+# Recebe $a0 = num de linhas, $a1 = num de colunas, $a2 = linha1, $a3 = linha2
+TROCA_LINHA_L:
+# Stacking
+addi $sp, $sp, -36
+sdc1 $f0, 0($sp)
+sdc1 $f2, 8($sp)
+sw $t0, 16($sp)
+sw $t1, 20($sp)
+sw $t2, 24($sp)
+sw $t3, 28($sp)
+sw $t4, 32($sp)
+# Body
+li $t0, 0
+
+sll $t1, $a1, 3
+mult $t1, $a2
+mflo $t1 # Primeiro elemento da linha 1
+
+sll $t2, $a1, 3
+mult $t2, $a3
+mflo $t2 # Primeiro elemento da linha 2
+
+TROCA_LINHA_L_LOOP:
+# Se $t0 for = $a2 ou $a3 eh por que estamos mexendo na diagonal principal
+# Como n se pode mexer na diagonal principal da matriz_l usamos esses branchs
+# Pra evitar isso
+beq $t0, $a2, TLL_NEXT_ITERATION
+beq $t0, $a3, TLL_NEXT_ITERATION
+
+sll $t4, $t0, 3
+
+add $t3, $t1, $t4
+ldc1 $f0, matriz_l($t3) # Pega elemento da linha 1
+
+add $t3, $t2, $t4
+ldc1 $f2, matriz_l($t3) # Pega elemento da linha 2
+
+sdc1 $f0, matriz_l($t3)
+
+add $t3, $t1, $t4
+
+sdc1 $f2, matriz_l($t3)
+
+TLL_NEXT_ITERATION: addi $t0, $t0, 1
+bne $t0, $a0, TROCA_LINHA_L_LOOP
+
+# Unstacking
+ldc1 $f0, 0($sp)
+ldc1 $f2, 8($sp)
+lw $t0, 16($sp)
+lw $t1, 20($sp)
+lw $t2, 24($sp)
+lw $t3, 28($sp)
+lw $t4, 32($sp)
+addi $sp, $sp, 36
+
+#TODO
+jr $ra # Fim da fucao
+
+
 
 
 # Funcao que realiza a operacao L2 = L2 - (lambda)*L1
